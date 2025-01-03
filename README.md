@@ -10,7 +10,35 @@ pip install pddl-utils
 
 ## Usage
 
-Coming soon...
+### Python
+
+```python
+import pddlutils as pu
+
+# Extended wrapper of the pddl library.
+domain, problem = pu.load('domain.pddl', 'problem.pddl')
+
+# Alternatively, if you have a pddl dom,prob pair, you can wrap it using...
+# domain, problem = pu.load(dom, prob)
+
+# Set of (lifted) fluents and actions
+domain.predicates
+domain.actions
+
+# Access a particular action or fluent or constant/object
+a = domain.action['move']
+f = domain.predicate['connected']
+
+p1 = domain.constant['person1']
+l1 = problem.object['loc1']
+l2 = problem.object['loc2']
+
+# Ground a predicate
+f = pu.ground(f, l1, l2)
+
+# Ground an action
+ag = pu.ground(a, p1, l1, l2)
+```
 
 ## Planned Usage
 
