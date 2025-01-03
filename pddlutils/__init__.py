@@ -1,9 +1,9 @@
 
 from pddl import parse_domain, parse_problem
 
-from pddlutils.grounding import ground
+from pddlutils.grounding import ground, unquantify
 
-__all__ = ['load', 'ground']
+__all__ = ['load', 'ground', 'unquantify']
 
 def load(_domain, _problem):
 
