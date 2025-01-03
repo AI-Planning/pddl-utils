@@ -1,7 +1,7 @@
 
 from pddl.logic import Predicate
-from pddl.core import Action
-from pddl.core import Domain, Problem
+from pddl.logic.base import BinaryOp, UnaryOp
+from pddl.core import Action, Domain, Problem
 
 def ground(lifted, *args):
     """
@@ -30,8 +30,45 @@ def ground(lifted, *args):
     else:
         raise ValueError("Unknown type of lifted object")
 
+def _recursive_ground(lifted, var2arg):
+    if isinstance(lifted, Predicate):
+        args = [var2arg[term] for term in lifted.terms]
+        return _ground_predicate(lifted, args)
+    elif isinstance(lifted, BinaryOp):
+        return lifted.__class__(*[_recursive_ground(l, var2arg) for l in lifted.operands])
+    elif isinstance(lifted, UnaryOp):
+        return lifted.__class__(_recursive_ground(lifted.argument, var2arg))
+    else:
+        raise NotImplementedError(f"Grounding of {type(lifted)} is not yet implemented")
+
 def _ground_action(action, args):
-    raise NotImplementedError("Grounding of actions is not yet implemented")
+    """
+    Ground an action with the given arguments.
+
+    Parameters
+    ----------
+    action : Action
+        Action to ground.
+    args : list
+        List of arguments to ground the action with.
+
+    Returns
+    -------
+    Action
+        Grounded action.
+    """
+
+    assert len(action.terms) == len(args), "Number of arguments must match"
+
+    for i in range(len(action.terms)):
+        assert args[i].type_tag in action.terms[i].type_tags, f"Type of arguments must match: {args[i].type_tag} not in {action.parameters[i].type_tags}"
+
+    var2arg = {var: arg for var, arg in zip(action.parameters, args)}
+    aname = action.name + '_' + '_'.join([arg.name for arg in args])
+    precond = _recursive_ground(action.precondition, var2arg)
+    effect = _recursive_ground(action.effect, var2arg)
+
+    return Action(aname, [], precond, effect)
 
 def _ground_predicate(predicate, args):
     """
