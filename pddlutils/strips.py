@@ -2,6 +2,7 @@ from typing import Optional
 
 from pddl.core import Action, And, Formula, Predicate
 from pddl.logic.base import Not
+from pddl.logic.predicates import EqualTo
 
 from pddlutils.types import Literal
 
@@ -16,6 +17,20 @@ def is_pos_literal(literal: Formula) -> bool:
 
 def is_literal(formula: Formula) -> bool:
     return is_pos_literal(formula) or is_neg_literal(formula)
+
+
+def is_equality_literal(literal: Formula) -> bool:
+    if isinstance(literal, Not):
+        return isinstance(literal.argument, EqualTo)
+    return isinstance(literal, EqualTo)
+
+
+def is_strips_condition(formula: Optional[Formula]) -> bool:
+    """Check a formula is a conjunct of literals, which may use equality"""
+    if formula is None:
+        return True
+    conjuncts = formula.operands if isinstance(formula, And) else [formula]
+    return all(is_literal(c) or is_equality_literal(c) for c in conjuncts)
 
 
 def get_strips_literal_list(formula: Optional[Formula]) -> list[Literal]:
@@ -55,10 +70,12 @@ def get_neg_literal_list(formula: Optional[Formula]) -> list[Not]:
 
 
 def is_strips_action(action: Action) -> bool:
-    """Check precondition and effects are conjuncts of literals"""
+    """Check precondition and effects are conjuncts of literals
+
+    Only the precondition may use equality.
+    """
     try:
-        get_strips_literal_list(action.precondition)
         get_strips_literal_list(action.effect)
-        return True
     except ValueError:
         return False
+    return is_strips_condition(action.precondition)
