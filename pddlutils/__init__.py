@@ -4,9 +4,9 @@ from pddl import parse_domain, parse_problem
 from pddlutils.exceptions import PDDLLogicError
 from pddlutils.grounding import ground
 from pddlutils.progression import is_applicable, progress
-from pddlutils.task import Task
+from pddlutils.task import ReplayResult, Task
 
-__all__ = ['load', 'ground', 'is_applicable', 'progress', 'Task', 'PDDLLogicError']
+__all__ = ['load', 'ground', 'is_applicable', 'progress', 'Task', 'ReplayResult', 'PDDLLogicError']
 
 def load(_domain, _problem):
 

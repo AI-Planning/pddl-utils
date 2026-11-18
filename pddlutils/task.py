@@ -1,9 +1,10 @@
+from dataclasses import dataclass
 from itertools import product
-from typing import Iterable, Sequence, Union
+from typing import Iterable, Optional, Sequence, Union
 
 from pddl import parse_domain, parse_problem
 from pddl.action import Action
-from pddl.core import Domain, Problem
+from pddl.core import Domain, Plan, Problem
 from pddl.logic import Predicate
 from pddl.logic.base import Not
 from pddl.logic.terms import Constant
@@ -13,6 +14,25 @@ from pddlutils.grounding import ground, has_type
 from pddlutils.progression import is_applicable, progress, satisfies
 from pddlutils.strips import is_strips_action, is_strips_condition
 from pddlutils.types import State
+
+
+@dataclass(frozen=True)
+class ReplayResult:
+    """The outcome of replaying a plan from a problem's initial state."""
+
+    states: tuple
+    """The states visited, starting with the initial state."""
+    failed_step: Optional[int]
+    """The zero-based index of the first step that failed, if any."""
+    failure_reason: Optional[str]
+    """Why that step failed, if any did."""
+    goal_reached: bool
+    """Whether every step succeeded and the final state satisfies the goal."""
+
+    @property
+    def succeeded(self) -> bool:
+        """Whether every step of the plan could be applied."""
+        return self.failed_step is None
 
 
 class Task:
@@ -94,6 +114,33 @@ class Task:
     def is_goal(self, state: State) -> bool:
         """Check if a state satisfies the problem's goal."""
         return satisfies(state, self.problem.goal)
+
+    def replay(self, plan: Union[Plan, Sequence[Action]]) -> ReplayResult:
+        """Replay a plan from the initial state, stopping at the first failure.
+
+        An invalid step is reported in the result rather than raised.
+        """
+        steps = (
+            plan.actions
+            if isinstance(plan, Plan)
+            else [(action.name, action.parameters) for action in plan]
+        )
+
+        state = self.initial_state
+        states = [state]
+        for index, (name, objects) in enumerate(steps):
+            try:
+                state = self.progress(state, self.ground(name, *objects))
+            except PDDLLogicError as error:
+                reason = f"{_step_text(name, objects)}: {error.message}"
+                return ReplayResult(tuple(states), index, reason, False)
+            states.append(state)
+        return ReplayResult(tuple(states), None, None, self.is_goal(state))
+
+
+def _step_text(name: str, objects: Sequence) -> str:
+    names = [str(getattr(obj, "name", obj)) for obj in objects]
+    return f"({' '.join([str(name), *names])})"
 
 
 def _merge_objects(*groups: Iterable[Constant]) -> dict[str, Constant]:
