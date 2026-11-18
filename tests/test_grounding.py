@@ -110,3 +110,24 @@ def test_action_without_a_precondition():
 
     assert ground.precondition is None
     assert ground.effect == Predicate("visited", L1)
+
+
+def test_action_that_mentions_a_domain_constant():
+    domain = DomainParser()(
+        f"""
+        (define (domain depot)
+          {REQUIREMENTS}
+          (:types truck place)
+          (:constants depot - place)
+          (:predicates (at ?t - truck ?p - place))
+          (:action leave
+            :parameters (?t - truck ?p - place)
+            :precondition (at ?t depot)
+            :effect (and (at ?t ?p) (not (at ?t depot)))))
+        """
+    )
+    depot = Constant("depot", type_tag="place")
+
+    ground = pu.ground(next(iter(domain.actions)), TRUCK, L1, domain=domain)
+
+    assert ground.precondition == Predicate("at", TRUCK, depot)
