@@ -4,7 +4,7 @@ from pddl.logic.base import And, Formula, Not
 from pddl.logic.predicates import EqualTo
 
 from pddlutils.exceptions import PDDLLogicError
-from pddlutils.strips import is_strips_action
+from pddlutils.strips import get_precondition, is_strips_action
 from pddlutils.types import State
 
 
@@ -55,6 +55,6 @@ def progress(state: State, action: Action) -> State:
         raise NotImplementedError(
             "Progression is currently only supported for STRIPS actions."
         )
-    if not satisfies(state, action.precondition):
+    if not satisfies(state, get_precondition(action)):
         raise PDDLLogicError("Action precondition is not satisfied in the state.")
     return apply_effects(state, action.effect)

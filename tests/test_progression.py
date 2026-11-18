@@ -3,6 +3,7 @@ from pddl.core import Action, And, Predicate
 from pddl.logic.base import Not
 from pddl.logic.helpers import constants, variables
 from pddl.logic.predicates import EqualTo
+from pddl.parser.domain import DomainParser
 
 from pddlutils.exceptions import PDDLLogicError
 from pddlutils.progression import progress
@@ -93,3 +94,44 @@ def test_progress_does_not_change_the_given_state():
 
     assert progress(state, action) == set()
     assert state == {Predicate("free")}
+
+
+@pytest.mark.parametrize("precondition", ["()", "(and)"])
+def test_empty_precondition_always_holds(precondition):
+    domain = DomainParser()(
+        f"""
+        (define (domain empty)
+          (:requirements :strips)
+          (:predicates (done))
+          (:action finish :parameters () :precondition {precondition} :effect (done)))
+        """
+    )
+
+    assert progress(set(), next(iter(domain.actions))) == {Predicate("done")}
+
+
+def test_action_without_an_effect_keeps_the_state():
+    domain = DomainParser()(
+        """
+        (define (domain idle)
+          (:requirements :strips)
+          (:predicates (done))
+          (:action wait :parameters () :precondition (done)))
+        """
+    )
+
+    assert progress({Predicate("done")}, next(iter(domain.actions))) == {Predicate("done")}
+
+
+def test_disjunctive_precondition_is_not_strips():
+    domain = DomainParser()(
+        """
+        (define (domain choice)
+          (:requirements :strips :disjunctive-preconditions)
+          (:predicates (p) (q))
+          (:action pick :parameters () :precondition (or (p) (q)) :effect (q)))
+        """
+    )
+
+    with pytest.raises(NotImplementedError):
+        progress({Predicate("p")}, next(iter(domain.actions)))

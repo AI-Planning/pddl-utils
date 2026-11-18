@@ -1,7 +1,7 @@
 from typing import Optional
 
 from pddl.core import Action, And, Formula, Predicate
-from pddl.logic.base import Not
+from pddl.logic.base import Not, Or
 from pddl.logic.predicates import EqualTo
 
 from pddlutils.types import Literal
@@ -23,6 +23,18 @@ def is_equality_literal(literal: Formula) -> bool:
     if isinstance(literal, Not):
         return isinstance(literal.argument, EqualTo)
     return isinstance(literal, EqualTo)
+
+
+def get_precondition(action: Action) -> Optional[Formula]:
+    """Get an action's precondition, or None if it is empty
+
+    The pddl library parses `:precondition ()` as a disjunction of nothing,
+    which would otherwise be false.
+    """
+    precondition = action.precondition
+    if isinstance(precondition, Or) and not precondition.operands:
+        return None
+    return precondition
 
 
 def is_strips_condition(formula: Optional[Formula]) -> bool:
@@ -78,4 +90,4 @@ def is_strips_action(action: Action) -> bool:
         get_strips_literal_list(action.effect)
     except ValueError:
         return False
-    return is_strips_condition(action.precondition)
+    return is_strips_condition(get_precondition(action))
