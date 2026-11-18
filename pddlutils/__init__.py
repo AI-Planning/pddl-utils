@@ -1,9 +1,11 @@
 
 from pddl import parse_domain, parse_problem
 
+from pddlutils.exceptions import PDDLLogicError
 from pddlutils.grounding import ground
+from pddlutils.progression import is_applicable, progress
 
-__all__ = ['load', 'ground']
+__all__ = ['load', 'ground', 'is_applicable', 'progress', 'PDDLLogicError']
 
 def load(_domain, _problem):
 

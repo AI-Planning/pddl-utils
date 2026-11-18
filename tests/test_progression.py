@@ -5,6 +5,7 @@ from pddl.logic.helpers import constants, variables
 from pddl.logic.predicates import EqualTo
 from pddl.parser.domain import DomainParser
 
+import pddlutils as pu
 from pddlutils.exceptions import PDDLLogicError
 from pddlutils.progression import progress
 
@@ -135,3 +136,20 @@ def test_disjunctive_precondition_is_not_strips():
 
     with pytest.raises(NotImplementedError):
         progress({Predicate("p")}, next(iter(domain.actions)))
+
+
+def test_is_applicable_reports_whether_the_precondition_holds():
+    l1, l2 = constants("l1 l2")
+    action = _move_action().instantiate([l1, l2])
+
+    assert pu.is_applicable({Predicate("at", l1)}, action)
+    assert not pu.is_applicable({Predicate("at", l2)}, action)
+
+
+def test_is_applicable_rejects_actions_outside_strips():
+    a, b = variables("a b")
+    action = Action("bad", [a, b], precondition=None, effect=EqualTo(a, b))
+    l1, l2 = constants("l1 l2")
+
+    with pytest.raises(NotImplementedError):
+        pu.is_applicable(set(), action.instantiate([l1, l2]))

@@ -176,4 +176,4 @@ def test_action_with_an_inequality_precondition():
 
     ground = pu.ground(next(iter(domain.actions)), L1, L2, domain=domain)
 
-    assert pu.progression.progress({Predicate("at", L1)}, ground) == {Predicate("at", L2)}
+    assert pu.progress({Predicate("at", L1)}, ground) == {Predicate("at", L2)}

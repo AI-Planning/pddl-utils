@@ -49,12 +49,17 @@ def apply_effects(state: State, effects: Optional[Formula]) -> State:
     return (state - deletes) | adds
 
 
-def progress(state: State, action: Action) -> State:
-    """Progress an action"""
+def is_applicable(state: State, action: Action) -> bool:
+    """Check if a ground action applies in a state"""
     if not is_strips_action(action):
         raise NotImplementedError(
-            "Progression is currently only supported for STRIPS actions."
+            "Applicability is currently only supported for STRIPS actions."
         )
-    if not satisfies(state, get_precondition(action)):
+    return satisfies(state, get_precondition(action))
+
+
+def progress(state: State, action: Action) -> State:
+    """Progress an action"""
+    if not is_applicable(state, action):
         raise PDDLLogicError("Action precondition is not satisfied in the state.")
     return apply_effects(state, action.effect)
