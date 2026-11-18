@@ -15,80 +15,53 @@ pip install pddl-utils
 ```python
 import pddlutils as pu
 
-# Extended wrapper of the pddl library.
-domain, problem = pu.load('domain.pddl', 'problem.pddl')
+# Bind a domain and problem together, from files or parsed `pddl` objects.
+task = pu.Task('domain.pddl', 'problem.pddl')
 
-# Alternatively, if you have a pddl dom,prob pair, you can wrap it using...
-# domain, problem = pu.load(dom, prob)
+# A state is the set of ground atoms that are true.
+state = task.initial_state
 
-# Set of (lifted) fluents and actions
-domain.predicates
-domain.actions
+# List ground actions and atoms, sorted by name and then object names.
+actions = task.applicable_actions(state)
+atoms = task.ground_atoms()
 
-# Access a particular action or fluent or constant/object
-a = domain.action['move']
-f = domain.predicate['connected']
+# Ground an action by name. Wrong types, arity or names raise PDDLLogicError.
+move = task.ground('move', 'person1', 'loc1', 'loc2')
 
-p1 = domain.constant['person1']
-l1 = problem.object['loc1']
-l2 = problem.object['loc2']
+# Check applicability and progress the state.
+if task.is_applicable(state, move):
+    state = task.progress(state, move)
 
-# Ground a predicate
-f = pu.ground(f, l1, l2)
+task.is_goal(state)
 
-# Ground an action
-ag = pu.ground(a, p1, l1, l2)
+# Replay a `pddl` Plan or a list of ground actions. Invalid steps are reported
+# in the result instead of being raised.
+result = task.replay([move])
+result.states          # States visited, starting with the initial state
+result.succeeded       # Whether every step applied
+result.failed_step     # Index of the first failing step, or None
+result.failure_reason  # Why that step failed, or None
+result.goal_reached    # Whether the plan succeeded and reached the goal
 ```
 
-## Planned Usage
-
-### Python
+Grounding also works without a `Task`, given the domain for its type hierarchy:
 
 ```python
-import pddlutils as pu
-
-# Extended wrapper of the pddl library.
 domain, problem = pu.load('domain.pddl', 'problem.pddl')
 
-# Alternatively, if you have a pddl dom,prob pair, you can wrap it using...
-# domain, problem = pu.load(dom, prob)
-
-# Set of (lifted) fluents and actions
-domain.predicates
-domain.actions
-
-# Access a particular action or fluent or constant/object
 a = domain.action['move']
-f = domain.predicate['connected']
-
 p1 = domain.constant['person1']
 l1 = problem.object['loc1']
 l2 = problem.object['loc2']
 
-# Ground a predicate
-f = pu.ground(f, l1, l2)
-
-# Ground an action
-ag = pu.ground(a, p1, l1, l2)
-
-# Ground an entire domain (actions and fluents replaced with type-specific ground versions)
-gdom, gprob = pu.ground(domain, problem)
-
-# Easy progression
-s0 = problem.init
-act = list(problem.actions)[0]
-s1 = tl.progress(s0, act)
-
-# Easy action/fluent lookup
-act = problem.action('move loc1 loc2')
-fluent = problem.fluent('connected loc1 loc2')
-assert fluent == problem.fluent('(connected loc1 loc2)')
-
-# parses plans from file, string, or list
-plan = problem.parse_plan('plan.ipc')
-plan = problem.parse_plan('(move loc1 loc2)\n(move loc2 loc3)')
-plan = problem.parse_plan(['move loc1 loc2', 'move loc2 loc3'])
+ag = pu.ground(a, p1, l1, l2, domain=domain)
 ```
+
+### Supported PDDL
+
+States and actions support `:strips`, `:typing`, `:negative-preconditions` and `:equality`. If an add and a delete effect name the same atom, the atom ends up true. `Task` raises `NotImplementedError` for a domain outside this fragment.
+
+## Planned Usage
 
 ### CLI
 

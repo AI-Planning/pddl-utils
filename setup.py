@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setup(
     name="pddl-utils",
-    version="0.0.1",
+    version="0.1.0",
     packages=find_packages(exclude=["tests"]),
     description="Library of miscellaneous utilies to work with PDDL (both in Python and on the command line).",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Christian Muise",
     author_email="christian.muise@gmail.com",
-    install_requires=["pddl"],
+    install_requires=["pddl>=0.6.1,<0.7"],
     license="MIT",
     url="https://github.com/AI-Planning/pddl-utils",
     classifiers=[
