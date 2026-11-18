@@ -1,6 +1,5 @@
 
 from pddl.logic import Predicate
-from pddl.logic.base import BinaryOp, UnaryOp
 from pddl.core import Action, Domain, Problem
 
 from pddlutils.exceptions import PDDLLogicError
@@ -69,18 +68,6 @@ def _check_arguments(name, terms, args, domain):
                 f"{term} of type {sorted(term.type_tags)}"
             )
 
-def _recursive_ground(lifted, var2arg):
-    if lifted is None:
-        return None
-    elif isinstance(lifted, Predicate):
-        return Predicate(lifted.name, *[var2arg.get(term, term) for term in lifted.terms])
-    elif isinstance(lifted, BinaryOp):
-        return lifted.__class__(*[_recursive_ground(l, var2arg) for l in lifted.operands])
-    elif isinstance(lifted, UnaryOp):
-        return lifted.__class__(_recursive_ground(lifted.argument, var2arg))
-    else:
-        raise NotImplementedError(f"Grounding of {type(lifted)} is not yet implemented")
-
 def _ground_action(action, args, domain):
     """
     Ground an action with the given arguments.
@@ -102,12 +89,7 @@ def _ground_action(action, args, domain):
 
     _check_arguments(action.name, action.parameters, args, domain)
 
-    var2arg = {var: arg for var, arg in zip(action.parameters, args)}
-    aname = action.name + '_' + '_'.join([arg.name for arg in args])
-    precond = _recursive_ground(action.precondition, var2arg)
-    effect = _recursive_ground(action.effect, var2arg)
-
-    return Action(aname, [], precond, effect)
+    return action.instantiate(list(args))
 
 def _ground_predicate(predicate, args, domain):
     """

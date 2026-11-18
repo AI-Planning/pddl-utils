@@ -131,3 +131,49 @@ def test_action_that_mentions_a_domain_constant():
     ground = pu.ground(next(iter(domain.actions)), TRUCK, L1, domain=domain)
 
     assert ground.precondition == Predicate("at", TRUCK, depot)
+
+
+def test_ground_action_keeps_its_name_and_objects():
+    ground = pu.ground(ACTIONS["drive"], TRUCK, L1, L2, domain=DOMAIN)
+
+    assert ground.name == "drive"
+    assert ground.parameters == (TRUCK, L1, L2)
+
+
+def test_ground_actions_with_similar_object_names_stay_distinct():
+    first = pu.ground(
+        ACTIONS["drive"],
+        Constant("a_b", type_tag="truck"),
+        Constant("c", type_tag="place"),
+        L1,
+        domain=DOMAIN,
+    )
+    second = pu.ground(
+        ACTIONS["drive"],
+        Constant("a", type_tag="truck"),
+        Constant("b_c", type_tag="place"),
+        L1,
+        domain=DOMAIN,
+    )
+
+    assert first.parameters != second.parameters
+    assert first != second
+
+
+def test_action_with_an_inequality_precondition():
+    domain = DomainParser()(
+        f"""
+        (define (domain distinct)
+          {REQUIREMENTS}
+          (:types place)
+          (:predicates (at ?p - place))
+          (:action go
+            :parameters (?a ?b - place)
+            :precondition (and (at ?a) (not (= ?a ?b)))
+            :effect (and (at ?b) (not (at ?a)))))
+        """
+    )
+
+    ground = pu.ground(next(iter(domain.actions)), L1, L2, domain=domain)
+
+    assert pu.progression.progress({Predicate("at", L1)}, ground) == {Predicate("at", L2)}
