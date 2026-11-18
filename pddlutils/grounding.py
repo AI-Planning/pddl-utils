@@ -70,7 +70,9 @@ def _check_arguments(name, terms, args, domain):
             )
 
 def _recursive_ground(lifted, var2arg):
-    if isinstance(lifted, Predicate):
+    if lifted is None:
+        return None
+    elif isinstance(lifted, Predicate):
         return Predicate(lifted.name, *[var2arg[term] for term in lifted.terms])
     elif isinstance(lifted, BinaryOp):
         return lifted.__class__(*[_recursive_ground(l, var2arg) for l in lifted.operands])

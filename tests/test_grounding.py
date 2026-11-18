@@ -93,3 +93,20 @@ def test_untyped_parameters_accept_any_object():
 def test_grounding_requires_the_domain():
     with pytest.raises(TypeError):
         pu.ground(ACTIONS["drive"], TRUCK, L1, L2)
+
+
+def test_action_without_a_precondition():
+    domain = DomainParser()(
+        f"""
+        (define (domain open)
+          {REQUIREMENTS}
+          (:types place)
+          (:predicates (visited ?p - place))
+          (:action visit :parameters (?p - place) :effect (visited ?p)))
+        """
+    )
+
+    ground = pu.ground(next(iter(domain.actions)), L1, domain=domain)
+
+    assert ground.precondition is None
+    assert ground.effect == Predicate("visited", L1)
