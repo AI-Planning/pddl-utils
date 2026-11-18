@@ -24,18 +24,29 @@ def satisfies(state: State, formula: Optional[Formula]) -> bool:
         raise NotImplementedError(f"Unsupported formula type: {type(formula)}")
 
 
-def apply_effects(state: State, effects: Optional[Formula]) -> State:
-    """Apply effects to a state"""
-    if isinstance(effects, Predicate):
-        return state | {effects}
-    elif isinstance(effects, Not):
-        return state - {effects.argument}
+def _effect_literals(effects: Optional[Formula]) -> tuple[set, set]:
+    """Split effects into the atoms they add and the atoms they delete"""
+    if effects is None:
+        return set(), set()
+    elif isinstance(effects, Predicate):
+        return {effects}, set()
+    elif isinstance(effects, Not) and isinstance(effects.argument, Predicate):
+        return set(), {effects.argument}
     elif isinstance(effects, And):
+        adds, deletes = set(), set()
         for effect in effects.operands:
-            state = apply_effects(state, effect)
-        return state
+            effect_adds, effect_deletes = _effect_literals(effect)
+            adds |= effect_adds
+            deletes |= effect_deletes
+        return adds, deletes
     else:
         raise NotImplementedError(f"Unsupported effects type: {type(effects)}")
+
+
+def apply_effects(state: State, effects: Optional[Formula]) -> State:
+    """Apply effects to a state, with deletes applied before adds"""
+    adds, deletes = _effect_literals(effects)
+    return (state - deletes) | adds
 
 
 def progress(state: State, action: Action) -> State:

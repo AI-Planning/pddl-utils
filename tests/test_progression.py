@@ -71,3 +71,25 @@ def test_equality_in_an_effect_is_not_strips():
 
     with pytest.raises(NotImplementedError):
         progress(set(), action.instantiate([l1, l2]))
+
+
+@pytest.mark.parametrize(
+    "effect",
+    [
+        And(Predicate("free"), Not(Predicate("free"))),
+        And(Not(Predicate("free")), Predicate("free")),
+    ],
+)
+@pytest.mark.parametrize("state", [set(), {Predicate("free")}])
+def test_add_wins_over_delete_of_the_same_atom(effect, state):
+    action = Action("toggle", [], precondition=None, effect=effect)
+
+    assert progress(state, action) == {Predicate("free")}
+
+
+def test_progress_does_not_change_the_given_state():
+    state = {Predicate("free")}
+    action = Action("clear", [], precondition=None, effect=Not(Predicate("free")))
+
+    assert progress(state, action) == set()
+    assert state == {Predicate("free")}
