@@ -7,6 +7,7 @@ from pddl.parser.domain import DomainParser
 from pddl.parser.problem import ProblemParser
 
 import pddlutils as pu
+import pddlutils.task
 
 REQUIREMENTS = "(:requirements :strips :typing :negative-preconditions :equality)"
 
@@ -153,3 +154,65 @@ def test_no_action_is_listed_when_preconditions_cannot_chain(size):
     task = make_task(CHAIN_DOMAIN, chain_problem(size))
 
     assert task.applicable_actions(task.initial_state) == []
+
+
+TYPE_LIKE_DOMAIN = f"""
+(define (domain type-like)
+  {REQUIREMENTS}
+  (:predicates (first ?a) (second ?a) (link ?a ?b))
+  (:action join
+    :parameters (?a ?b)
+    :precondition (and (first ?a) (second ?b) (link ?a ?b))
+    :effect (not (link ?a ?b))))
+"""
+
+
+def ring_problem(domain, size, facts):
+    names = [f"n{index:03}" for index in range(size)]
+    links = [
+        f"(link {name} {names[(index + step) % size]})"
+        for index, name in enumerate(names)
+        for step in (1, 2, 3)
+    ]
+    extras = [fact.format(name) for name in names for fact in facts]
+    return f"""
+    (define (problem ring-{size})
+      (:domain {domain})
+      {REQUIREMENTS}
+      (:objects {' '.join(names)})
+      (:init {' '.join(links + extras)})
+      (:goal (link n000 n001)))
+    """
+
+
+def count_matches(monkeypatch, task):
+    matches = []
+    match = pu.task._match
+
+    def counting_match(*args):
+        matches.append(args)
+        return match(*args)
+
+    monkeypatch.setattr(pu.task, "_match", counting_match)
+    return len(task.applicable_actions(task.initial_state)), len(matches)
+
+
+def test_matching_work_grows_linearly_for_connected_preconditions(monkeypatch):
+    size = 60
+    task = make_task(CHAIN_DOMAIN, ring_problem("chain", size, []))
+
+    applicable, matches = count_matches(monkeypatch, task)
+
+    assert applicable == 27 * size
+    assert matches <= 60 * size
+
+
+def test_unrelated_preconditions_are_not_multiplied_together(monkeypatch):
+    size = 60
+    problem = ring_problem("type-like", size, ["(first {})", "(second {})"])
+    task = make_task(TYPE_LIKE_DOMAIN, problem)
+
+    applicable, matches = count_matches(monkeypatch, task)
+
+    assert applicable == 3 * size
+    assert matches <= 10 * size
