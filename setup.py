@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="pddl-utils",
-    version="0.2.0",
+    version="0.2.1",
     packages=find_packages(exclude=["tests"]),
     description="Library of miscellaneous utilies to work with PDDL (both in Python and on the command line).",
     long_description=long_description,

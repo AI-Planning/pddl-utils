@@ -52,6 +52,17 @@ class Task:
         self._objects = _merge_objects(self.domain.constants, self.problem.objects)
         self.objects = tuple(self._objects[name] for name in sorted(self._objects))
         self.initial_state = _initial_state(self.problem.init)
+        self._allowed = {
+            name: {
+                str(term.name): dict.fromkeys(
+                    str(obj.name)
+                    for obj in self.objects
+                    if has_type(obj, term, self.domain)
+                )
+                for term in action.parameters
+            }
+            for name, action in self._actions.items()
+        }
 
     def _check_fragment(self) -> None:
         for action in self.domain.actions:
@@ -94,7 +105,7 @@ class Task:
 
     def applicable_actions(self, state: State) -> list[Action]:
         """List the ground actions that apply in a state."""
-        facts = _facts_by_predicate(state)
+        facts = _FactIndex(state)
         applicable = []
         for name in sorted(self._actions):
             action = self._actions[name]
@@ -104,26 +115,21 @@ class Task:
                     applicable.append(grounded)
         return applicable
 
-    def _candidate_arguments(self, action: Action, facts: dict) -> list[tuple]:
+    def _candidate_arguments(self, action: Action, facts: "_FactIndex") -> list[tuple]:
         """List argument tuples that satisfy the action's positive preconditions.
 
         Parameters those preconditions don't mention range over every object of
         their type, so the caller still checks each candidate against the state.
         """
         parameters = [str(term.name) for term in action.parameters]
-        allowed = {
-            str(term.name): [
-                str(obj.name) for obj in self.objects if has_type(obj, term, self.domain)
-            ]
-            for term in action.parameters
-        }
+        allowed = self._allowed[str(action.name)]
 
         bindings = [{}]
-        for atom in _positive_atoms(action, facts):
+        for atom in _join_order(action, facts):
             bindings = [
                 extended
                 for binding in bindings
-                for fact in facts.get(str(atom.name), ())
+                for fact in facts.matching(atom, binding)
                 if (extended := _match(atom, fact, binding, allowed)) is not None
             ]
 
@@ -172,21 +178,61 @@ class Task:
         return ReplayResult(tuple(states), None, None, self.is_goal(state))
 
 
-def _facts_by_predicate(state: State) -> dict[str, list[Predicate]]:
-    facts: dict[str, list[Predicate]] = {}
-    for fact in state:
-        facts.setdefault(str(fact.name), []).append(fact)
-    return facts
+class _FactIndex:
+    """The facts of a state, found by predicate or by an argument's position."""
+
+    def __init__(self, state: State):
+        self.by_predicate: dict[str, list[Predicate]] = {}
+        self._by_argument: dict[tuple, list[Predicate]] = {}
+        for fact in state:
+            predicate = str(fact.name)
+            self.by_predicate.setdefault(predicate, []).append(fact)
+            for position, term in enumerate(fact.terms):
+                key = (predicate, position, str(term.name))
+                self._by_argument.setdefault(key, []).append(fact)
+
+    def matching(self, atom: Predicate, binding: dict) -> list[Predicate]:
+        """List the fewest facts that could match the atom, given a binding."""
+        predicate = str(atom.name)
+        candidates = self.by_predicate.get(predicate, [])
+        for position, term in enumerate(atom.terms):
+            name = str(term.name)
+            value = binding.get(name) if isinstance(term, Variable) else name
+            if value is not None:
+                found = self._by_argument.get((predicate, position, value), [])
+                if len(found) < len(candidates):
+                    candidates = found
+        return candidates
 
 
-def _positive_atoms(action: Action, facts: dict) -> list[Predicate]:
-    """List positive preconditions, starting with those matching the fewest facts."""
+def _variables(atom: Predicate) -> set[str]:
+    return {str(term.name) for term in atom.terms if isinstance(term, Variable)}
+
+
+def _join_order(action: Action, facts: _FactIndex) -> list[Predicate]:
+    """Order positive preconditions so each one shares parameters with earlier ones."""
     precondition = get_precondition(action)
     if precondition is None:
         return []
     conjuncts = getattr(precondition, "operands", (precondition,))
-    atoms = [atom for atom in conjuncts if isinstance(atom, Predicate)]
-    return sorted(atoms, key=lambda atom: len(facts.get(str(atom.name), ())))
+    remaining = [atom for atom in conjuncts if isinstance(atom, Predicate)]
+
+    def cost(atom: Predicate, bound: set[str]) -> tuple:
+        variables = _variables(atom)
+        unbound = len(variables - bound)
+        count = len(facts.by_predicate.get(str(atom.name), ()))
+        if unbound < len(variables) or not variables:
+            return (0, unbound, count)
+        return (1, count, unbound)
+
+    ordered: list[Predicate] = []
+    bound: set[str] = set()
+    while remaining:
+        atom = min(remaining, key=lambda candidate: cost(candidate, bound))
+        remaining.remove(atom)
+        ordered.append(atom)
+        bound |= _variables(atom)
+    return ordered
 
 
 def _match(
