@@ -7,12 +7,12 @@ from pddl.action import Action
 from pddl.core import Domain, Plan, Problem
 from pddl.logic import Predicate
 from pddl.logic.base import Not
-from pddl.logic.terms import Constant
+from pddl.logic.terms import Constant, Variable
 
 from pddlutils.exceptions import PDDLLogicError
 from pddlutils.grounding import ground, has_type
 from pddlutils.progression import is_applicable, progress, satisfies
-from pddlutils.strips import is_strips_action, is_strips_condition
+from pddlutils.strips import get_precondition, is_strips_action, is_strips_condition
 from pddlutils.types import State
 
 
@@ -94,14 +94,48 @@ class Task:
 
     def applicable_actions(self, state: State) -> list[Action]:
         """List the ground actions that apply in a state."""
+        facts = _facts_by_predicate(state)
         applicable = []
         for name in sorted(self._actions):
             action = self._actions[name]
-            for arguments in self._groundings(action.parameters):
+            for arguments in self._candidate_arguments(action, facts):
                 grounded = action.instantiate(list(arguments))
                 if is_applicable(state, grounded):
                     applicable.append(grounded)
         return applicable
+
+    def _candidate_arguments(self, action: Action, facts: dict) -> list[tuple]:
+        """List argument tuples that satisfy the action's positive preconditions.
+
+        Parameters those preconditions don't mention range over every object of
+        their type, so the caller still checks each candidate against the state.
+        """
+        parameters = [str(term.name) for term in action.parameters]
+        allowed = {
+            str(term.name): [
+                str(obj.name) for obj in self.objects if has_type(obj, term, self.domain)
+            ]
+            for term in action.parameters
+        }
+
+        bindings = [{}]
+        for atom in _positive_atoms(action, facts):
+            bindings = [
+                extended
+                for binding in bindings
+                for fact in facts.get(str(atom.name), ())
+                if (extended := _match(atom, fact, binding, allowed)) is not None
+            ]
+
+        candidates = []
+        for binding in bindings:
+            free = [name for name in parameters if name not in binding]
+            for values in product(*[allowed[name] for name in free]):
+                complete = {**binding, **dict(zip(free, values))}
+                candidates.append(tuple(complete[name] for name in parameters))
+        return [
+            tuple(self._objects[name] for name in names) for names in sorted(candidates)
+        ]
 
     def is_applicable(self, state: State, action: Action) -> bool:
         """Check if a ground action applies in a state."""
@@ -136,6 +170,44 @@ class Task:
                 return ReplayResult(tuple(states), index, reason, False)
             states.append(state)
         return ReplayResult(tuple(states), None, None, self.is_goal(state))
+
+
+def _facts_by_predicate(state: State) -> dict[str, list[Predicate]]:
+    facts: dict[str, list[Predicate]] = {}
+    for fact in state:
+        facts.setdefault(str(fact.name), []).append(fact)
+    return facts
+
+
+def _positive_atoms(action: Action, facts: dict) -> list[Predicate]:
+    """List positive preconditions, starting with those matching the fewest facts."""
+    precondition = get_precondition(action)
+    if precondition is None:
+        return []
+    conjuncts = getattr(precondition, "operands", (precondition,))
+    atoms = [atom for atom in conjuncts if isinstance(atom, Predicate)]
+    return sorted(atoms, key=lambda atom: len(facts.get(str(atom.name), ())))
+
+
+def _match(
+    atom: Predicate, fact: Predicate, binding: dict, allowed: dict
+) -> Optional[dict]:
+    """Extend a binding so the atom equals the fact, or return None if it can't."""
+    if len(atom.terms) != len(fact.terms):
+        return None
+
+    extended = dict(binding)
+    for term, value in zip(atom.terms, fact.terms):
+        name = str(value.name)
+        if isinstance(term, Variable):
+            parameter = str(term.name)
+            if name not in allowed[parameter]:
+                return None
+            if extended.setdefault(parameter, name) != name:
+                return None
+        elif str(term.name) != name:
+            return None
+    return extended
 
 
 def _step_text(name: str, objects: Sequence) -> str:
